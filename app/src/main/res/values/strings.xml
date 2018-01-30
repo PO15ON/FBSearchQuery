@@ -2,5 +2,6 @@
     <string name="app_name">FBSearchQuery</string>
     <string name="facebook_app_id">179200562829758</string>
     <string name="fb_login_protocol_scheme">fb179200562829758</string>
-
+    <string name="error_message">please make sure the group is public Or you are the admin.</string>
+    <string name="loading_message">Getting The group ID, Please Wait..</string>
 </resources>

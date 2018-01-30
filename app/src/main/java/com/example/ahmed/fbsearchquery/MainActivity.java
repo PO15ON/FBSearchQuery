@@ -3,13 +3,14 @@ package com.example.ahmed.fbsearchquery;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import com.facebook.AccessToken;
@@ -24,27 +25,62 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
+import java.util.ArrayList;
+
 public class MainActivity extends AppCompatActivity {
+
+    // TODO: 1/30/2018 when click on a post opens it (in app Or in facebook app)
+    // TODO: 1/30/2018 notifications
 
     private static final String TAG = "Login - Keyword";
     EditText searchQ, limit, groupLink;
     Button searchButton;
-    TextView textView;
-
+    RecyclerView recyclerView;
     String id, query;
+    ContentAdapter contentAdapter;
+    String[] messages, dates;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        limit = (EditText) findViewById(R.id.limit);
-        searchQ = (EditText) findViewById(R.id.search_q);
-        searchButton = (Button) findViewById(R.id.search_b);
-        textView = (TextView) findViewById(R.id.text);
-        groupLink = (EditText) findViewById(R.id.group_link);
-
+        limit = findViewById(R.id.limit);
+        searchQ = findViewById(R.id.search_q);
+        searchButton = findViewById(R.id.search_b);
+        groupLink = findViewById(R.id.group_link);
         query = searchQ.getText().toString();
+
+
+        recyclerView = findViewById(R.id.recycler_view);
+
+        recyclerView.setHasFixedSize(true);
+
+        LinearLayoutManager linearLayoutManager = new LinearLayoutManager(this);
+
+        recyclerView.setLayoutManager(linearLayoutManager);
+
+        contentAdapter = new ContentAdapter();
+        recyclerView.setAdapter(contentAdapter);
+
+
+        searchQ.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) {
+                query = null;
+            }
+
+            @Override
+            public void onTextChanged(CharSequence charSequence, int i, int i1, int i2) {
+
+            }
+
+            @Override
+            public void afterTextChanged(Editable editable) {
+                query = searchQ.getText().toString();
+                new GetId().execute(groupLink.getText().toString());
+            }
+        });
 
         groupLink.addTextChangedListener(new TextWatcher() {
             @Override
@@ -59,7 +95,10 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void afterTextChanged(Editable editable) {
+
+                // Get group ID
                 new GetId().execute(groupLink.getText().toString());
+
                 Log.i(TAG, "afterTextChanged: groupLink = " + groupLink.getText().toString());
                 Log.i(TAG, "afterTextChanged: id = " + id);
             }
@@ -89,10 +128,11 @@ public class MainActivity extends AppCompatActivity {
                         });
 
                 Bundle parameters = new Bundle();
-                parameters.putString("fields", "message");
                 parameters.putString("limit", limit.getText().toString());
+                parameters.putString("fields", "created_time,message");
                 request.setParameters(parameters);
                 request.executeAsync();
+
             }
         });
     }
@@ -102,30 +142,58 @@ public class MainActivity extends AppCompatActivity {
         JSONObject data = response.getJSONObject();
 
         if (data == null) {
-            textView.setText("please make sure the group is public Or you are the admin.");
+            Toast.makeText(this, R.string.error_message, Toast.LENGTH_SHORT).show();
             return;
         }
-        Log.i(TAG, "createJson: data = " + data);
+//        Log.i(TAG, "createJson: data = " + data);
         JSONArray jsonArray = data.getJSONArray("data");
-        textView.setText("");
         int count = 0, androidCount = 0;
-        Log.i(TAG, "createJson: jsonArray length = " + jsonArray.length());
+//        Log.i(TAG, "createJson: jsonArray length = " + jsonArray.length());
 
+//        messages = new String[jsonArray.length()];
+//        dates = new String[jsonArray.length()];
+        ArrayList<String> queryMessages = new ArrayList<>();
+        ArrayList<String> queryDates = new ArrayList<>();
+
+        int j = 0;
         for (int i = 0; i < jsonArray.length(); i++) {
             try {
 //                Log.i(TAG, "createJson: jsonArray = " + jsonArray);
                 JSONObject jsonObject = jsonArray.getJSONObject(i);
+//                Log.i(TAG, "createJson: jsonObject = " + jsonObject.toString());
                 String message = jsonObject.getString("message");
+
+                String updatedTime, Time;
+
+                Time = jsonObject.getString("created_time").replace("T", " ");
+                updatedTime = Time.substring(0, Time.lastIndexOf("+"));
+
                 count++;
+                Log.i(TAG, "createJson: query = " + query);
 //                Log.i(TAG, "onCompleted: message = " + message);
                 if (message.toLowerCase().contains(query.toLowerCase())) {
-                    textView.append(message + "\n.....................................................................................................\n");
+
+                    queryMessages.add(message);
+                    queryDates.add(updatedTime);
+
+//                    Log.i(TAG, "createJson: update = " + updatedTime);
+
                     androidCount++;
                 }
             } catch (JSONException e) {
                 e.printStackTrace();
             }
         }
+
+        messages = new String[queryMessages.size()];
+        dates = new String[queryDates.size()];
+
+        for(int i=0; i<queryMessages.size(); i++) {
+            messages[i] = queryMessages.get(i);
+            dates[i] = queryDates.get(i);
+        }
+
+        contentAdapter.setData(messages, dates);
         Toast.makeText(this, "Found " + androidCount + " " + query + " posts of " + count + " total posts scanned", Toast.LENGTH_SHORT).show();
 
     }
@@ -137,7 +205,7 @@ public class MainActivity extends AppCompatActivity {
             super.onPreExecute();
             searchButton.setEnabled(false);
             if (groupLink.getText().toString() != "")
-                textView.setText("Getting The group ID, Please Wait..");
+                Toast.makeText(MainActivity.this, R.string.loading_message, Toast.LENGTH_SHORT).show();
         }
 
         @Override
@@ -165,7 +233,6 @@ public class MainActivity extends AppCompatActivity {
         protected void onPostExecute(Void aVoid) {
             super.onPostExecute(aVoid);
             searchButton.setEnabled(true);
-            textView.setText("");
         }
     }
 
